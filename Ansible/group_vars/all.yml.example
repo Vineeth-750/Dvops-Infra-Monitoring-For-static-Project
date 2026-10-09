@@ -1,0 +1,6 @@
+---
+deploy_user: deploy
+node_exporter_version: "1.8.2"
+prometheus_version: "2.54.1"
+grafana_admin_password: "CHANGE_THIS_NOW"
+web_image: "YOUR_DOCKERHUB_USERNAME/static-site:latest"
