@@ -1,0 +1,92 @@
+---
+- name: Install prerequisites
+  ansible.builtin.dnf:
+    name:
+      - tar
+      - gzip
+      - firewalld
+    state: present
+
+- name: Create Prometheus system user
+  ansible.builtin.user:
+    name: prometheus
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+
+- name: Create Prometheus directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: prometheus
+    group: prometheus
+    mode: "0755"
+  loop:
+    - /etc/prometheus
+    - /var/lib/prometheus
+    - /opt/prometheus
+
+- name: Download Prometheus
+  ansible.builtin.unarchive:
+    src: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+    dest: /opt/prometheus
+    remote_src: true
+    extra_opts: [--strip-components=1]
+    creates: /opt/prometheus/prometheus
+
+- name: Install Prometheus config
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: /etc/prometheus/prometheus.yml
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+  notify: Restart Prometheus
+
+- name: Install Prometheus systemd unit
+  ansible.builtin.template:
+    src: prometheus.service.j2
+    dest: /etc/systemd/system/prometheus.service
+    mode: "0644"
+  notify: Restart Prometheus
+
+- name: Enable and start Prometheus
+  ansible.builtin.systemd:
+    name: prometheus
+    daemon_reload: true
+    state: started
+    enabled: true
+
+- name: Install Grafana repository
+  ansible.builtin.copy:
+    dest: /etc/yum.repos.d/grafana.repo
+    mode: "0644"
+    content: |
+      [grafana]
+      name=Grafana
+      baseurl=https://rpm.grafana.com
+      repo_gpgcheck=1
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://rpm.grafana.com/gpg.key
+      sslverify=1
+      sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+
+- name: Install Grafana
+  ansible.builtin.dnf:
+    name: grafana
+    state: present
+
+- name: Set Grafana admin password
+  ansible.builtin.lineinfile:
+    path: /etc/grafana/grafana.ini
+    regexp: '^;?admin_password\s*='
+    line: "admin_password = {{ grafana_admin_password }}"
+  no_log: true
+  notify: Restart Grafana
+
+- name: Enable and start Grafana
+  ansible.builtin.systemd:
+    name: grafana-server
+    enabled: true
+    state: started
