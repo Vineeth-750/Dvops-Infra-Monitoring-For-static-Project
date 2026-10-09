@@ -1,0 +1,16 @@
+---
+- name: Configure web host
+  hosts: web
+  become: true
+  vars_files:
+    - group_vars/all.yml
+  roles:
+    - web
+
+- name: Configure monitoring host
+  hosts: monitoring
+  become: true
+  vars_files:
+    - group_vars/all.yml
+  roles:
+    - monitoring

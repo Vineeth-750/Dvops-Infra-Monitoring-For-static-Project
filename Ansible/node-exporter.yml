@@ -1,0 +1,62 @@
+---
+- name: Install Node Exporter on all monitored hosts
+  hosts: web:monitoring
+  become: true
+  vars_files:
+    - group_vars/all.yml
+  tasks:
+    - name: Create node_exporter user
+      ansible.builtin.user:
+        name: node_exporter
+        system: true
+        shell: /sbin/nologin
+        create_home: false
+
+    - name: Create Node Exporter directory
+      ansible.builtin.file:
+        path: /opt/node_exporter
+        state: directory
+        owner: node_exporter
+        group: node_exporter
+        mode: "0755"
+
+    - name: Download and unpack Node Exporter
+      ansible.builtin.unarchive:
+        src: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+        dest: /opt/node_exporter
+        remote_src: true
+        extra_opts: [--strip-components=1]
+        creates: /opt/node_exporter/node_exporter
+
+    - name: Install Node Exporter systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/node_exporter.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Prometheus Node Exporter
+          After=network-online.target
+
+          [Service]
+          User=node_exporter
+          Group=node_exporter
+          ExecStart=/opt/node_exporter/node_exporter
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Restart Node Exporter
+
+    - name: Enable and start Node Exporter
+      ansible.builtin.systemd:
+        name: node_exporter
+        daemon_reload: true
+        enabled: true
+        state: started
+
+  handlers:
+    - name: Restart Node Exporter
+      ansible.builtin.systemd:
+        name: node_exporter
+        daemon_reload: true
+        state: restarted
